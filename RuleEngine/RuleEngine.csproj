@@ -52,6 +52,7 @@
   <ItemGroup>
     <Compile Include="Filter.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RuleBuilder.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
