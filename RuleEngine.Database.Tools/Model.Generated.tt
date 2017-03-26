@@ -1,0 +1,137 @@
+﻿<#@ template language="C#" hostspecific="true" debug="True" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Data" #>
+<#@ assembly name="System.Xml" #>
+<#@ assembly name="Microsoft.SqlServer.Smo" #>
+<#@ assembly name="Microsoft.SqlServer.ConnectionInfo" #>
+<#@ assembly name="Microsoft.SqlServer.Management.Sdk.Sfc" #>
+<#@ assembly name="EnvDTE" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="Microsoft.SqlServer.Management.Smo" #>
+<#@ import namespace="EnvDTE" #>
+<#@ import namespace="System.Diagnostics" #>
+<#
+    string sqlDatabase = "Person";
+    string classNamespace = "RuleEngine.Person";
+    string destinationFolder = "Models";
+ 
+    Server server = new Server(".");
+    server.ConnectionContext.LoginSecure = true;
+    server.ConnectionContext.Connect();
+ 
+    foreach (Table table in server.Databases[sqlDatabase].Tables)
+    {
+        if (table.Name.StartsWith("sys"))
+        {
+            continue;
+        }
+		var className = table.Name;
+		//if(!string.IsNullOrEmpty(table.Schema) && table.Schema != "dbo")
+		//	className = table.Schema + className;
+#>
+using System;
+namespace <#= classNamespace #>.<#= table.Schema #>
+{
+    public class <#= className #>
+    {
+<# 
+        int columnCount = table.Columns.Count;
+        int i = 0;
+ 
+        foreach (Column col in table.Columns)
+        {
+            i++;
+            string propertyType = GetNetDataType(col.DataType.Name);
+ 
+            if (string.IsNullOrWhiteSpace(propertyType))
+            {
+                continue;
+            }
+ 
+            if (col.Nullable && propertyType != "string")
+            {
+                propertyType += "?";
+            }
+#>
+        public <#= propertyType #> <#= col.Name #> { get; set; }
+<#
+            if (i != columnCount)
+            {
+#>
+ 
+<#
+            }
+#>
+<#
+        }
+#>
+    }
+}      
+<#
+		var visualStudio = (this.Host as IServiceProvider).GetService(typeof(DTE)) as DTE;
+		var project = visualStudio.Solution.FindProjectItem(this.Host.TemplateFile).ContainingProject as Project;
+		var filename = table.Schema + "." + className + ".generated.cs";
+        SaveOutput(filename, destinationFolder);
+		var p = project.ProjectItems;
+		var pdir = Host.ResolveAssemblyReference("$(ProjectDir)");
+		p.AddFromFile(pdir+destinationFolder+"\\" + filename);
+    } 
+#>
+<#+
+    public static string GetNetDataType(string sqlDataTypeName)
+    {
+        switch (sqlDataTypeName.ToLower())
+        {
+            case "bigint":
+                return "Int64";
+            case "binary":
+            case "image":
+            case "varbinary":
+                return "byte[]";
+            case "bit":
+                return "bool";
+            case "char":
+                return "char";
+            case "datetime":
+            case "smalldatetime":
+                return "DateTime";
+            case "decimal":
+            case "money":
+            case "numeric":
+                return "decimal";
+            case "float":
+                return "double";
+            case "int":
+                return "int";
+            case "nchar":
+            case "nvarchar":
+            case "text":
+            case "varchar":
+            case "xml":
+                return "string";
+            case "real":
+                return "single";
+            case "smallint":
+                return "Int16";
+            case "tinyint":
+                return "byte";
+            case "uniqueidentifier":
+                return "Guid";
+                 
+            default:
+                return null;
+        }
+    }
+ 
+    void SaveOutput(string outputFileName, string destinationFolder)
+    {
+        string templateDirectory = Path.Combine(Path.GetDirectoryName(Host.TemplateFile), destinationFolder);
+        string outputFilePath = Path.Combine(templateDirectory, outputFileName);
+        File.Delete(outputFilePath);
+        File.WriteAllText(outputFilePath, this.GenerationEnvironment.ToString()); 
+        this.GenerationEnvironment.Remove(0, this.GenerationEnvironment.Length);
+    }
+#>
